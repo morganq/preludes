@@ -7,65 +7,21 @@ require.config({
 	}
 });
 
-require(["three.min", "text!5.frag.glsl", "text!5.vert.glsl", "text!5.obj"], function(three, frag, vert, obj) {
+require(["three.min", "util", "util3d", "text!5.frag.glsl", "text!5.vert.glsl", "text!5.obj"],
+	function(three, util, util3d, frag, vert, obj) {
 	obj = JSON.parse(obj);
+	var trans = util3d.trans;
+	var mergeGeometry = util3d.mergeGeometry;
+	var rotxyz = util3d.rotxyz;
+	var scale = util3d.scale;
 	var makeBaseCube = function() {
 		var c = new three.CubeGeometry(0.6,0.5,1);
 		return c;
 	}
 
-	var rotxyz = function(geo, x, y, z) {
-		var mat = new three.Matrix4();
-		if(x) { mat.rotateX(x); }
-		if(y) { mat.rotateY(y); }
-		if(z) { mat.rotateZ(z); }
-		geo.vertices.each(function(v) {
-			v.applyMatrix4(mat);
-		});
-		geo.normals.each(function(n) {
-			n.applyMatrix4(mat);
-		});
-		geo.faces.each(function(f) {
-			f.normal.applyMatrix4(mat);
-		});
-		return geo;
+	var makeHex = function() {
+		return util3d.rotxyz(new three.CircleGeometry(4, 6),0,-Math.PI/2,0);
 	}
-
-	var trans = function(geo, x, y, z) {
-		geo.vertices.each(function(v) {
-			v.x += x; v.y += y; v.z += z;
-		});
-		return geo;
-	}
-
-	var scale = function(geo, x, y, z) {
-		geo.vertices.each(function(v) {
-			v.x *= x; v.y *= y; v.z *= z;
-		});
-		return geo;
-	}
-
-	var mergeGeometry = function(a, b) {
-		var geo = new three.Geometry();
-		geo.vertices.extend(a.vertices);
-		var start = geo.vertices.length;
-		geo.vertices.extend(b.vertices);
-		geo.faces.extend(a.faces);
-		geo.faces.extend(b.faces.map(function(f) {
-			if(f.d !== undefined) {
-				return new three.Face4(f.a + start, 
-								 f.b + start,
-								 f.c + start,
-								 f.d + start,
-								 f.normal, f.color, f.materialIndex);
-			}
-			return new three.Face3(f.a + start,
-							 f.b + start,
-							 f.c + start,
-							 f.normal, f.color, f.materialIndex);
-		}));
-		return geo;
-	};
 
 	var patternR = function(radius, count, cb, deg, start) {
 		deg = (deg || 360) * 3.14159 / 180;
@@ -118,7 +74,12 @@ require(["three.min", "text!5.frag.glsl", "text!5.vert.glsl", "text!5.obj"], fun
 	var lastTime = new Date().getTime();
 	var fov = 75;
 
-	var ind = 0
+	var ind = 8
+
+	var makeBGMesh = function(geo) {
+		return new three.Mesh(geo, new three.MeshPhongMaterial({color:0xffffff})); 
+	}
+
 	var makeMesh = function(geo, start) {
 		var attrs = {
 			vTarget: {type:"v3", value:[]},
@@ -138,12 +99,10 @@ require(["three.min", "text!5.frag.glsl", "text!5.vert.glsl", "text!5.obj"], fun
 			if(i%8 < 4) {
 				// based on model
 				orthize.x = obj[ind][0] * 1.4
-				//orthize.y = obj[ind][1]
 				orthize.z = obj[ind][2]
 			}
 			else {
 				orthize.x = obj[ind][0]/2 * 1.4;
-				//orthize.y = obj[ind][1];
 				orthize.z = obj[ind][2]/2;
 			}
 			ind += 1;
@@ -161,10 +120,14 @@ require(["three.min", "text!5.frag.glsl", "text!5.vert.glsl", "text!5.obj"], fun
 
 	var makeScene = function() {
 		scene = new three.Scene();
-		var base = makeMesh(trans(
-					new three.CubeGeometry(7, 0.1, 7),
-					0, -0.5, 0), 0);
-		scene.add(base);
+		for(var i = 0; i < 5; i++) {
+			var base = makeBGMesh(trans(
+						rotxyz(
+							new three.CircleGeometry(4 + i*2, 6),
+							-Math.PI/2, 0, 0),
+						0, -0.5 - i, 0), 0);
+			scene.add(base);
+		}
 
 		var y = 0;
 		var scTime = 0;
@@ -204,21 +167,34 @@ require(["three.min", "text!5.frag.glsl", "text!5.vert.glsl", "text!5.obj"], fun
 		sculptPart(2.81, 14, 300, -95);
 		sculptPart(2.73, 14, 360, -55);
 		sculptPart(2.81, 14, 360, -95);
-		//sculptPart(2.5, 14, 360, -55);
-		//sculptPart(2.3, 14, 360, -95);
-		//sculptPart(2.0, 14, 360, -95);
-		//sculptPart(1.5, 14, 360, -95);
+
+		y = -40;
+		bgTime = 0;
+		var bgPart = function(radius, count, start) {
+			var g = patternR(radius, count, makeHex, 360, start);
+			var sy = 8;
+			trans(g, 0, y, 0);
+			y += 0.5 * sy;
+			scene.add(makeBGMesh(g,scTime));
+			scTime += count + 5;
+		}
+
+		for(var i = 0; i < 16; i++) {
+			var z = Math.abs(i-8)*0;
+			bgPart(30-z, 12, 0);
+			bgPart(29.8-z, 12, 15);
+		}
+
 
 		light = new three.PointLight(0x000000, 10, 70);
 		light.position.set( 0, 5, 0);
 		scene.add(light);
+
 		ready = true;
 		a = 0;
 		time = 0;
 		lastTime = new Date().getTime();
 		fov = 75;
-
-		sceneObjs = scene.getDescendants();
 	}
 
 	var pitch = 0;
