@@ -7,8 +7,8 @@ require.config({
 	}
 });
 
-require(["three.min", "util", "util3d", "text!5.frag.glsl", "text!5.vert.glsl", "text!5.obj"],
-	function(three, util, util3d, frag, vert, obj) {
+require(["three.min", "util", "util3d", "text!5.frag.glsl", "text!5.vert.glsl", "text!5.obj", "text!5.frag2.glsl", "text!5.vert2.glsl"],
+	function(three, util, util3d, frag, vert, obj, frag2, vert2) {
 	obj = JSON.parse(obj);
 	var trans = util3d.trans;
 	var mergeGeometry = util3d.mergeGeometry;
@@ -20,7 +20,7 @@ require(["three.min", "util", "util3d", "text!5.frag.glsl", "text!5.vert.glsl", 
 	}
 
 	var makeHex = function() {
-		return util3d.rotxyz(new three.CircleGeometry(4, 6),0,-Math.PI/2,0);
+		return util3d.rotxyz(new three.CircleGeometry(4, 6),Math.PI/2,-Math.PI/2,0);
 	}
 
 	var patternR = function(radius, count, cb, deg, start) {
@@ -75,9 +75,34 @@ require(["three.min", "util", "util3d", "text!5.frag.glsl", "text!5.vert.glsl", 
 	var fov = 75;
 
 	var ind = 8
+	var bgspiral = 0;
 
 	var makeBGMesh = function(geo) {
-		return new three.Mesh(geo, new three.MeshPhongMaterial({color:0xffffff})); 
+		var attributes = {
+			timeOffset: {type:"f", value:[]},	
+			col: {type:"v3", value:[]}
+		};
+		var mat = new three.ShaderMaterial({
+			vertexShader: vert2,
+			fragmentShader: frag2,
+			uniforms: uniforms,
+			attributes: attributes
+		});
+		var rt = 0 
+		var color = new three.Vector3(0,0,0);
+		for(var i = 0; i < geo.vertices.length; i++) { 
+			if(i%8 == 0) {
+				rt = (i%16/5 + bgspiral) * 4 - 3.5; 
+				color = new three.Vector3(
+				   0.1 + Math.random() * 0.2,
+			   	   0.9,
+			       0.4 + Math.random() * 0.3);	   
+			}				
+			attributes.timeOffset.value.push(rt);	
+			attributes.col.value.push(color);
+		}
+		bgspiral += 0.1;
+		return new three.Mesh(geo, mat); 
 	}
 
 	var makeMesh = function(geo, start) {
@@ -169,20 +194,24 @@ require(["three.min", "util", "util3d", "text!5.frag.glsl", "text!5.vert.glsl", 
 		sculptPart(2.81, 14, 360, -95);
 
 		y = -40;
+		r = 0
 		bgTime = 0;
 		var bgPart = function(radius, count, start) {
-			var g = patternR(radius, count, makeHex, 360, start);
-			var sy = 8;
+			var g = patternR(radius, count, function() { 
+				return rotxyz(makeHex(), r, 0, 0);
+			}, 360, start + r);
+			var sy = 8.5;
 			trans(g, 0, y, 0);
 			y += 0.5 * sy;
 			scene.add(makeBGMesh(g,scTime));
 			scTime += count + 5;
+			r += 9 * 1.6180339;
 		}
 
 		for(var i = 0; i < 16; i++) {
 			var z = Math.abs(i-8)*0;
 			bgPart(30-z, 12, 0);
-			bgPart(29.8-z, 12, 15);
+			bgPart(29.8-z, 12, 0);
 		}
 
 
